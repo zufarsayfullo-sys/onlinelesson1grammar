@@ -1,121 +1,1060 @@
-/**
- * GOOGLE APPS SCRIPT FOR QUIZ RESULTS
- * 
- * SETUP INSTRUCTIONS:
- * 1. Open your Google Sheet: https://docs.google.com/spreadsheets/d/1jGa3gP4rCwZR_NcpPmmFrlXZok1zuPsjeZ2OnWuevWg/edit
- * 2. Click on "Extensions" > "Apps Script"
- * 3. Delete any existing code
- * 4. Copy and paste this entire code
- * 5. Click the disk icon to save
- * 6. Click "Deploy" > "New deployment"
- * 7. Click the gear icon next to "Select type" and choose "Web app"
- * 8. Set the following:
- *    - Description: Quiz Results Collector
- *    - Execute as: Me
- *    - Who has access: Anyone
- * 9. Click "Deploy"
- * 10. Copy the Web App URL and send it back to me
- * 11. Click "Authorize access" and grant permissions
- */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unit 1: Grammar Exercises</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-function doPost(e) {
-  try {
-    // Parse the incoming data
-    const data = JSON.parse(e.postData.contents);
-    
-    // Get the active spreadsheet
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // Create or get the Summary sheet
-    let summarySheet = ss.getSheetByName('Summary');
-    if (!summarySheet) {
-      summarySheet = ss.insertSheet('Summary');
-      // Add headers
-      summarySheet.appendRow([
-        'Timestamp',
-        'Student Name',
-        'Score',
-        'Total Questions',
-        'Percentage',
-        'Grade'
-      ]);
-      // Format headers
-      summarySheet.getRange('A1:F1').setFontWeight('bold').setBackground('#4a90e2').setFontColor('#ffffff');
-    }
-    
-    // Calculate grade
-    const percentage = data.percentage;
-    let grade = 'F';
-    if (percentage >= 90) grade = 'A';
-    else if (percentage >= 80) grade = 'B';
-    else if (percentage >= 70) grade = 'C';
-    else if (percentage >= 60) grade = 'D';
-    
-    // Add summary data
-    summarySheet.appendRow([
-      data.timestamp,
-      data.studentName,
-      data.score,
-      data.totalQuestions,
-      data.percentage + '%',
-      grade
-    ]);
-    
-    // Create or get detailed results sheet for this student
-    const sheetName = data.studentName + ' - ' + new Date().toLocaleDateString();
-    let detailSheet = ss.getSheetByName(sheetName);
-    if (!detailSheet) {
-      detailSheet = ss.insertSheet(sheetName);
-      // Add headers
-      detailSheet.appendRow([
-        'Question #',
-        'Section',
-        'Question',
-        'Correct Answer',
-        'Student Answer',
-        'Result'
-      ]);
-      // Format headers
-      detailSheet.getRange('A1:F1').setFontWeight('bold').setBackground('#4a90e2').setFontColor('#ffffff');
-    }
-    
-    // Add detailed results
-    data.results.forEach(function(result) {
-      detailSheet.appendRow([
-        result.questionNumber,
-        result.section,
-        result.question,
-        result.correctAnswer,
-        result.studentAnswer,
-        result.isCorrect ? '✓ Correct' : '✗ Incorrect'
-      ]);
-      
-      // Color code the result
-      const lastRow = detailSheet.getLastRow();
-      if (result.isCorrect) {
-        detailSheet.getRange(lastRow, 6).setBackground('#d5f4e6').setFontColor('#27ae60');
-      } else {
-        detailSheet.getRange(lastRow, 6).setBackground('#fadbd8').setFontColor('#e74c3c');
-      }
-    });
-    
-    // Auto-resize columns
-    detailSheet.autoResizeColumns(1, 6);
-    summarySheet.autoResizeColumns(1, 6);
-    
-    return ContentService.createTextOutput(JSON.stringify({
-      'result': 'success',
-      'message': 'Data saved successfully'
-    })).setMimeType(ContentService.MimeType.JSON);
-    
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({
-      'result': 'error',
-      'message': error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, rgba(30, 60, 114, 0.9), rgba(42, 82, 152, 0.85)), 
+                        url('https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=1600') center/cover fixed;
+            min-height: 100vh;
+            color: #333;
+            overflow-x: hidden;
+        }
 
-function doGet(e) {
-  return ContentService.createTextOutput('Quiz Results API is running. Use POST to submit data.');
-}
+        .saving-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(39, 174, 96, 0.9);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            display: none;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+
+        /* Student Info Screen */
+        #info-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .info-container {
+            background: rgba(255, 255, 255, 0.97);
+            border-radius: 25px;
+            padding: 50px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        .info-title {
+            font-size: 2.5em;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .info-subtitle {
+            font-size: 1.1em;
+            color: #7f8c8d;
+            margin-bottom: 35px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1em;
+            border: 3px solid #ddd;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 10px rgba(52, 152, 219, 0.3);
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 100%;
+            padding: 18px;
+            font-size: 1.2em;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .btn-start:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+        }
+
+        /* Menu Screen */
+        #menu-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .menu-title {
+            font-size: 3.5em;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 15px;
+            color: #fff;
+            text-shadow: 3px 3px 15px rgba(0,0,0,0.5);
+            animation: fadeInDown 0.8s ease;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .menu-subtitle {
+            font-size: 1.4em;
+            color: #e0e0e0;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
+        }
+
+        .student-name-display {
+            font-size: 1.2em;
+            color: #fff;
+            background: rgba(0,0,0,0.3);
+            padding: 10px 20px;
+            border-radius: 10px;
+            margin-bottom: 40px;
+        }
+
+        .exercises-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .exercise-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px 25px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            border: 3px solid transparent;
+        }
+
+        .exercise-card:hover {
+            transform: translateY(-8px) scale(1.03);
+            border-color: #3498db;
+            box-shadow: 0 15px 50px rgba(52, 152, 219, 0.4);
+        }
+
+        .exercise-icon {
+            font-size: 3.5em;
+            margin-bottom: 15px;
+        }
+
+        .exercise-title {
+            font-size: 1.5em;
+            color: #2c3e50;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .exercise-count {
+            font-size: 0.9em;
+            color: #7f8c8d;
+            margin-top: 10px;
+        }
+
+        /* Quiz Screen */
+        #quiz-screen {
+            display: none;
+            padding: 30px 20px;
+            min-height: 100vh;
+        }
+
+        .quiz-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.97);
+            border-radius: 25px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        }
+
+        .progress-section {
+            margin-bottom: 30px;
+        }
+
+        .progress-container {
+            width: 100%;
+            height: 14px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #e74c3c 0%, #f39c12 50%, #27ae60 100%);
+            width: 0%;
+            transition: width 0.5s ease;
+            border-radius: 10px;
+            position: relative;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .progress-text {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.95em;
+            color: #555;
+            font-weight: 600;
+        }
+
+        .exercise-header {
+            text-align: center;
+            margin-bottom: 35px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #3498db;
+        }
+
+        .exercise-header h2 {
+            font-size: 2em;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .student-info-display-quiz {
+            background: #e8f4f8;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            font-size: 1em;
+            color: #2c3e50;
+        }
+
+        .question-counter {
+            font-size: 1.1em;
+            color: #7f8c8d;
+            font-weight: 600;
+        }
+
+        .question-card {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            border-left: 5px solid #3498db;
+        }
+
+        .question-text {
+            font-size: 1.3em;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .input-area {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1em;
+            border: 3px solid #ddd;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .input-area:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 10px rgba(52, 152, 219, 0.3);
+        }
+
+        .input-area.correct {
+            border-color: #27ae60;
+            background: #eafaf1;
+        }
+
+        .input-area.incorrect {
+            border-color: #e74c3c;
+            background: #fdedec;
+        }
+
+        .feedback {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            display: none;
+        }
+
+        .feedback.correct {
+            display: block;
+            background: #d5f4e6;
+            color: #27ae60;
+            border-left: 4px solid #27ae60;
+        }
+
+        .feedback.incorrect {
+            display: block;
+            background: #fadbd8;
+            color: #e74c3c;
+            border-left: 4px solid #e74c3c;
+        }
+
+        .correct-answer {
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff3cd;
+            border-left: 4px solid #f39c12;
+            border-radius: 5px;
+            font-size: 0.95em;
+        }
+
+        .example-box {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-style: italic;
+            color: #555;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 15px 35px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-home {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-home:hover {
+            background: #c0392b;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+        }
+
+        .btn-check {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-check:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+
+        .btn-next {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-next:hover {
+            background: #229954;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
+        }
+
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* Results Screen */
+        #results-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .results-container {
+            background: rgba(255, 255, 255, 0.97);
+            border-radius: 25px;
+            padding: 50px;
+            max-width: 700px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        .results-title {
+            font-size: 3em;
+            color: #2c3e50;
+            margin-bottom: 25px;
+        }
+
+        .score-display {
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            margin: 30px auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            position: relative;
+            animation: scaleIn 0.6s ease;
+        }
+
+        @keyframes scaleIn {
+            from {
+                transform: scale(0);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .score-percentage {
+            font-size: 4em;
+            font-weight: bold;
+        }
+
+        .score-label {
+            font-size: 1.2em;
+            margin-top: -10px;
+        }
+
+        .score-display::before {
+            content: '';
+            position: absolute;
+            inset: -6px;
+            border-radius: 50%;
+            padding: 6px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            animation: rotate 4s linear infinite;
+        }
+
+        @keyframes rotate {
+            100% { transform: rotate(360deg); }
+        }
+
+        .feedback-message {
+            font-size: 1.6em;
+            margin: 25px 0;
+            color: #555;
+            font-weight: 600;
+        }
+
+        .score-breakdown {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin: 30px 0;
+        }
+
+        .breakdown-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #ddd;
+            font-size: 1.15em;
+        }
+
+        .breakdown-row:last-child {
+            border-bottom: none;
+        }
+
+        @media (max-width: 768px) {
+            .info-container, .quiz-container, .results-container {
+                padding: 30px 25px;
+            }
+
+            .menu-title {
+                font-size: 2.5em;
+            }
+
+            .exercises-grid {
+                grid-template-columns: 1fr;
+                max-width: 400px;
+            }
+
+            .question-text {
+                font-size: 1.15em;
+            }
+
+            .button-container {
+                flex-direction: column;
+            }
+
+            button:not(.btn-start) {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="saving-indicator" id="saving-indicator">💾 Saving to Google Sheets...</div>
+
+    <!-- Student Info Screen -->
+    <div id="info-screen">
+        <div class="info-container">
+            <h1 class="info-title">📚 Grammar Exercises</h1>
+            <p class="info-subtitle">Unit 1: Be Verb & Forms</p>
+            
+            <div class="form-group">
+                <label class="form-label" for="student-name">Your Name:</label>
+                <input type="text" id="student-name" class="form-input" placeholder="Enter your full name" required>
+            </div>
+
+            <button class="btn-start" onclick="showMenu()">Start →</button>
+        </div>
+    </div>
+
+    <!-- Menu Screen -->
+    <div id="menu-screen">
+        <h1 class="menu-title">📚 Grammar Exercises</h1>
+        <p class="menu-subtitle">Unit 1: Be Verb & Forms</p>
+        <div class="student-name-display" id="student-name-menu"></div>
+        
+        <div class="exercises-grid">
+            <div class="exercise-card" onclick="startExercise('1.1')">
+                <div class="exercise-icon">✏️</div>
+                <div class="exercise-title">Exercise 1.1</div>
+                <div>Short & Full Forms</div>
+                <div class="exercise-count">10 questions</div>
+            </div>
+
+            <div class="exercise-card" onclick="startExercise('1.2')">
+                <div class="exercise-icon">✍️</div>
+                <div class="exercise-title">Exercise 1.2</div>
+                <div>Am/Is/Are</div>
+                <div class="exercise-count">11 questions</div>
+            </div>
+
+            <div class="exercise-card" onclick="startExercise('1.3')">
+                <div class="exercise-icon">📝</div>
+                <div class="exercise-title">Exercise 1.3</div>
+                <div>Full Sentences</div>
+                <div class="exercise-count">10 questions</div>
+            </div>
+
+            <div class="exercise-card" onclick="startExercise('1.4')">
+                <div class="exercise-icon">✅</div>
+                <div class="exercise-title">Exercise 1.4</div>
+                <div>Positive/Negative</div>
+                <div class="exercise-count">14 questions</div>
+            </div>
+
+            <div class="exercise-card" onclick="startExercise('2.1')">
+                <div class="exercise-icon">❓</div>
+                <div class="exercise-title">Exercise 2.1</div>
+                <div>Yes/No Questions</div>
+                <div class="exercise-count">6 questions</div>
+            </div>
+
+            <div class="exercise-card" onclick="startExercise('2.2')">
+                <div class="exercise-icon">❔</div>
+                <div class="exercise-title">Exercise 2.2</div>
+                <div>Wh- Questions</div>
+                <div class="exercise-count">9 questions</div>
+            </div>
+
+            <div class="exercise-card" onclick="startExercise('2.3')">
+                <div class="exercise-icon">🗣️</div>
+                <div class="exercise-title">Exercise 2.3</div>
+                <div>Ask Questions</div>
+                <div class="exercise-count">10 questions</div>
+            </div>
+
+            <div class="exercise-card" onclick="startExercise('2.4')">
+                <div class="exercise-icon">💬</div>
+                <div class="exercise-title">Exercise 2.4</div>
+                <div>Short Answers</div>
+                <div class="exercise-count">10 questions</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quiz Screen -->
+    <div id="quiz-screen">
+        <div class="quiz-container">
+            <div class="progress-section">
+                <div class="progress-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                <div class="progress-text" id="progress-text">Question 1 of 10</div>
+            </div>
+
+            <div class="exercise-header">
+                <h2 id="exercise-title"></h2>
+                <div class="student-info-display-quiz" id="student-info-display"></div>
+                <p class="question-counter" id="question-counter">Question 1</p>
+            </div>
+
+            <div class="question-card">
+                <div id="question-content"></div>
+            </div>
+
+            <div class="button-container">
+                <button class="btn-home" onclick="goToMenu()">🏠 Menu</button>
+                <button class="btn-check" id="check-btn" onclick="checkAnswer()">✓ Check</button>
+                <button class="btn-next" id="next-btn" onclick="nextQuestion()" style="display:none;">Next →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Screen -->
+    <div id="results-screen">
+        <div class="results-container">
+            <h2 class="results-title">🎉 Exercise Complete!</h2>
+            <div class="score-display" id="score-circle">
+                <div class="score-percentage" id="score-percentage">0%</div>
+                <div class="score-label">Score</div>
+            </div>
+            <p class="feedback-message" id="feedback-message"></p>
+            <div class="score-breakdown">
+                <div class="breakdown-row">
+                    <span>Correct:</span>
+                    <span id="correct-count" style="color: #27ae60; font-weight: bold;">0</span>
+                </div>
+                <div class="breakdown-row">
+                    <span>Incorrect:</span>
+                    <span id="incorrect-count" style="color: #e74c3c; font-weight: bold;">0</span>
+                </div>
+                <div class="breakdown-row">
+                    <span>Total Questions:</span>
+                    <span id="total-questions" style="font-weight: bold;">0</span>
+                </div>
+            </div>
+            <div class="button-container">
+                <button class="btn-home" onclick="goToMenu()">🏠 Back to Menu</button>
+                <button class="btn-next" onclick="retakeExercise()">🔄 Try Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz7XpqZskd2oZnrOybjPoqn83J4dvMtMvWM7qGsm2bqnEjOhtKvIVtrgioE8AWidiqF/exec';
+
+        const exercises = {
+            '1.1': {
+                title: 'Exercise 1.1: Short & Full Forms',
+                questions: [
+                    { q: "Write the short form: he is", a: "he's", type: 'text' },
+                    { q: "Write the short form: they are", a: "they're", type: 'text' },
+                    { q: "Write the short form: she is not", a: "she isn't|she's not", type: 'text' },
+                    { q: "Write the short form: it is", a: "it's", type: 'text' },
+                    { q: "Write the short form: I am not", a: "i'm not", type: 'text' },
+                    { q: "Write the short form: you are not", a: "you aren't|you're not", type: 'text' },
+                    { q: "Write the full form: we aren't", a: "we are not", type: 'text' },
+                    { q: "Write the full form: I'm", a: "i am", type: 'text' },
+                    { q: "Write the full form: you're", a: "you are", type: 'text' },
+                    { q: "Write the full form: they aren't", a: "they are not", type: 'text' }
+                ]
+            },
+            '1.2': {
+                title: 'Exercise 1.2: Am/Is/Are',
+                questions: [
+                    { q: "The weather ___ very nice today.", a: "is", type: 'text' },
+                    { q: "I ___ not tired.", a: "am", type: 'text' },
+                    { q: "This case ___ very heavy.", a: "is", type: 'text' },
+                    { q: "These cases ___ very heavy.", a: "are", type: 'text' },
+                    { q: "The dog ___ asleep.", a: "is", type: 'text' },
+                    { q: "Look! There ___ Carol.", a: "is", type: 'text' },
+                    { q: "I ___ hot. Can you open the window, please?", a: "am", type: 'text' },
+                    { q: "This castle ___ one thousand years old.", a: "is", type: 'text' },
+                    { q: "My brother and I ___ good tennis players.", a: "are", type: 'text' },
+                    { q: "Ann ___ at home but her children ___ at school. (Fill both blanks)", a: "is are|is, are", type: 'text' },
+                    { q: "I ___ a student. My sister ___ an architect. (Fill both blanks)", a: "am is|am, is", type: 'text' }
+                ]
+            },
+            '1.3': {
+                title: 'Exercise 1.3: Full Sentences',
+                questions: [
+                    { q: "(my shoes / very dirty) Write the complete sentence:", a: "my shoes are very dirty", type: 'text', hint: "My shoes are very dirty." },
+                    { q: "(my bed / very comfortable) Write the complete sentence:", a: "my bed is very comfortable", type: 'text', hint: "My bed is very comfortable." },
+                    { q: "(your cigarettes / in your bag) Write the complete sentence:", a: "your cigarettes are in your bag", type: 'text', hint: "Your cigarettes are in your bag." },
+                    { q: "(I / not very happy today) Write the complete sentence:", a: "i am not very happy today|i'm not very happy today", type: 'text', hint: "I am not very happy today." },
+                    { q: "(this restaurant / very expensive) Write the complete sentence:", a: "this restaurant is very expensive", type: 'text', hint: "This restaurant is very expensive." },
+                    { q: "(the shops / not open today) Write the complete sentence:", a: "the shops are not open today|the shops aren't open today", type: 'text', hint: "The shops are not open today." },
+                    { q: "(Mr Kelly's daughter / six years old) Write the complete sentence:", a: "mr kelly's daughter is six years old", type: 'text', hint: "Mr Kelly's daughter is six years old." },
+                    { q: "(the houses / in this street / very old) Write the complete sentence:", a: "the houses in this street are very old", type: 'text', hint: "The houses in this street are very old." },
+                    { q: "(the examination / not difficult) Write the complete sentence:", a: "the examination is not difficult|the examination isn't difficult", type: 'text', hint: "The examination is not difficult." },
+                    { q: "(those flowers / very beautiful) Write the complete sentence:", a: "those flowers are very beautiful", type: 'text', hint: "Those flowers are very beautiful." }
+                ]
+            },
+            '1.4': {
+                title: 'Exercise 1.4: Positive/Negative',
+                questions: [
+                    { q: "(Paris / the capital of France) Complete: Paris...", a: "paris is the capital of france", type: 'text', hint: "Paris is the capital of France." },
+                    { q: "(I / interested in football) Complete: I...", a: "i am not interested in football|i'm not interested in football", type: 'text', hint: "I'm not interested in football." },
+                    { q: "(I / hungry) Complete: I...", a: "i am hungry|i'm hungry", type: 'text', hint: "I am hungry." },
+                    { q: "(it / warm today) Complete: It...", a: "it is warm today|it's warm today|it is not warm today|it isn't warm today|it's not warm today", type: 'text', hint: "It is warm today OR It isn't warm today." },
+                    { q: "(Rome / in Spain) Complete: Rome...", a: "rome is not in spain|rome isn't in spain", type: 'text', hint: "Rome is not in Spain." },
+                    { q: "(I / afraid of dogs) Complete: I...", a: "i am afraid of dogs|i'm afraid of dogs|i am not afraid of dogs|i'm not afraid of dogs", type: 'text', hint: "I am afraid of dogs OR I'm not afraid of dogs." },
+                    { q: "(my hands / cold) Complete: My...", a: "my hands are cold|my hands are not cold|my hands aren't cold", type: 'text', hint: "My hands are cold OR My hands aren't cold." },
+                    { q: "(Canada / a very big country) Complete the sentence:", a: "canada is a very big country", type: 'text', hint: "Canada is a very big country." },
+                    { q: "(the Amazon / in Africa) Complete the sentence:", a: "the amazon is not in africa|the amazon isn't in africa", type: 'text', hint: "The Amazon is not in Africa." },
+                    { q: "(diamonds / cheap) Complete the sentence:", a: "diamonds are not cheap|diamonds aren't cheap", type: 'text', hint: "Diamonds are not cheap." },
+                    { q: "(motor-racing / a dangerous sport) Complete the sentence:", a: "motor-racing is a dangerous sport|motor racing is a dangerous sport", type: 'text', hint: "Motor-racing is a dangerous sport." },
+                    { q: "(cats / big animals) Complete the sentence:", a: "cats are not big animals|cats aren't big animals", type: 'text', hint: "Cats are not big animals." },
+                    { q: "(it / sunny today) Complete: It...", a: "it is sunny today|it's sunny today|it is not sunny today|it isn't sunny today|it's not sunny today", type: 'text', hint: "It is sunny today OR It isn't sunny today." },
+                    { q: "(I / a teacher) Complete: I...", a: "i am a teacher|i'm a teacher|i am not a teacher|i'm not a teacher", type: 'text', hint: "I am a teacher OR I'm not a teacher." }
+                ]
+            },
+            '2.1': {
+                title: 'Exercise 2.1: Yes/No Questions',
+                questions: [
+                    { q: "(your mother / at home?)", a: "is your mother at home", type: 'text', hint: "Is your mother at home?" },
+                    { q: "(your parents / at home?)", a: "are your parents at home", type: 'text', hint: "Are your parents at home?" },
+                    { q: "(this hotel / expensive?)", a: "is this hotel expensive", type: 'text', hint: "Is this hotel expensive?" },
+                    { q: "(you / interested in art?)", a: "are you interested in art", type: 'text', hint: "Are you interested in art?" },
+                    { q: "(the shops / open today?)", a: "are the shops open today", type: 'text', hint: "Are the shops open today?" },
+                    { q: "(the park / open today?)", a: "is the park open today", type: 'text', hint: "Is the park open today?" }
+                ]
+            },
+            '2.2': {
+                title: 'Exercise 2.2: Wh- Questions',
+                questions: [
+                    { q: "(what colour / your car?)", a: "what colour is your car|what color is your car", type: 'text', hint: "What colour is your car?" },
+                    { q: "(where / my key?)", a: "where is my key", type: 'text', hint: "Where is my key?" },
+                    { q: "(where / my socks?)", a: "where are my socks", type: 'text', hint: "Where are my socks?" },
+                    { q: "(how old / your father?)", a: "how old is your father", type: 'text', hint: "How old is your father?" },
+                    { q: "(what colour / his eyes?)", a: "what colour are his eyes|what color are his eyes", type: 'text', hint: "What colour are his eyes?" },
+                    { q: "(why / John angry with me?)", a: "why is john angry with me", type: 'text', hint: "Why is John angry with me?" },
+                    { q: "(how much / these shoes?)", a: "how much are these shoes", type: 'text', hint: "How much are these shoes?" },
+                    { q: "(who / your favourite actor?)", a: "who is your favourite actor|who is your favorite actor", type: 'text', hint: "Who is your favourite actor?" },
+                    { q: "(why / you always late?)", a: "why are you always late", type: 'text', hint: "Why are you always late?" }
+                ]
+            },
+            '2.3': {
+                title: 'Exercise 2.3: Ask Questions',
+                questions: [
+                    { q: "Ask about his name", a: "what is your name|what's your name", type: 'text', hint: "What's your name?" },
+                    { q: "Ask if he is married or single", a: "are you married or single", type: 'text', hint: "Are you married or single?" },
+                    { q: "Ask if he is British", a: "are you british", type: 'text', hint: "Are you British?" },
+                    { q: "Ask where he is from", a: "where are you from", type: 'text', hint: "Where are you from?" },
+                    { q: "Ask how old he is", a: "how old are you", type: 'text', hint: "How old are you?" },
+                    { q: "Ask if he is a student", a: "are you a student", type: 'text', hint: "Are you a student?" },
+                    { q: "Ask if his wife is a teacher", a: "is your wife a teacher", type: 'text', hint: "Is your wife a teacher?" },
+                    { q: "Ask where she is from", a: "where is she from", type: 'text', hint: "Where is she from?" },
+                    { q: "Ask about her name", a: "what is her name|what's her name", type: 'text', hint: "What's her name?" },
+                    { q: "Ask how old she is", a: "how old is she", type: 'text', hint: "How old is she?" }
+                ]
+            },
+            '2.4': {
+                title: 'Exercise 2.4: Short Answers',
+                questions: [
+                    { q: "Are you married?", a: "no i am not|no i'm not|yes i am", type: 'text', hint: "Yes, I am. / No, I'm not." },
+                    { q: "Are you tall?", a: "yes i am|no i am not|no i'm not", type: 'text', hint: "Yes, I am. / No, I'm not." },
+                    { q: "Is it cold today?", a: "yes it is|no it is not|no it isn't|no it's not", type: 'text', hint: "Yes, it is. / No, it isn't." },
+                    { q: "Are you a teacher?", a: "yes i am|no i am not|no i'm not", type: 'text', hint: "Yes, I am. / No, I'm not." },
+                    { q: "Are you tired?", a: "yes i am|no i am not|no i'm not", type: 'text', hint: "Yes, I am. / No, I'm not." },
+                    { q: "Is it dark now?", a: "yes it is|no it is not|no it isn't|no it's not", type: 'text', hint: "Yes, it is. / No, it isn't." },
+                    { q: "Are your hands cold?", a: "yes they are|no they are not|no they aren't", type: 'text', hint: "Yes, they are. / No, they aren't." },
+                    { q: "Are you hungry?", a: "yes i am|no i am not|no i'm not", type: 'text', hint: "Yes, I am. / No, I'm not." },
+                    { q: "Is your father tall?", a: "yes he is|no he is not|no he isn't|no he's not", type: 'text', hint: "Yes, he is. / No, he isn't." },
+                    { q: "Is it sunny?", a: "yes it is|no it is not|no it isn't|no it's not", type: 'text', hint: "Yes, it is. / No, it isn't." }
+                ]
+            }
+        };
+
+        let studentName = '';
+        let currentExercise = '';
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let totalQuestions = 0;
+        let questionResults = [];
+
+        function showMenu() {
+            studentName = document.getElementById('student-name').value.trim();
+
+            if (!studentName) {
+                alert('Please enter your name.');
+                return;
+            }
+
+            document.getElementById('info-screen').style.display = 'none';
+            document.getElementById('menu-screen').style.display = 'flex';
+            document.getElementById('student-name-menu').textContent = `👤 ${studentName}`;
+        }
+
+        function startExercise(exerciseId) {
+            currentExercise = exerciseId;
+            currentQuestionIndex = 0;
+            score = 0;
+            questionResults = [];
+            totalQuestions = exercises[exerciseId].questions.length;
+
+            document.getElementById('menu-screen').style.display = 'none';
+            document.getElementById('quiz-screen').style.display = 'block';
+            document.getElementById('results-screen').style.display = 'none';
+
+            document.getElementById('exercise-title').textContent = exercises[exerciseId].title;
+            document.getElementById('student-info-display').textContent = `Student: ${studentName}`;
+            
+            loadQuestion();
+        }
+
+        function loadQuestion() {
+            const exercise = exercises[currentExercise];
+            const question = exercise.questions[currentQuestionIndex];
+
+            const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100;
+            document.getElementById('progress-bar').style.width = progress + '%';
+            document.getElementById('progress-text').textContent = `Question ${currentQuestionIndex + 1} of ${totalQuestions}`;
+            document.getElementById('question-counter').textContent = `Question ${currentQuestionIndex + 1}`;
+
+            let questionHTML = `<div class="question-text">${question.q}</div>`;
+
+            if (question.hint) {
+                questionHTML += `<div class="example-box">Example: ${question.hint}</div>`;
+            }
+
+            questionHTML += '<input type="text" class="input-area" id="answer-input" placeholder="Type your answer here...">';
+            questionHTML += '<div class="feedback" id="feedback"></div>';
+
+            document.getElementById('question-content').innerHTML = questionHTML;
+
+            document.getElementById('check-btn').style.display = 'inline-block';
+            document.getElementById('next-btn').style.display = 'none';
+
+            setTimeout(() => {
+                const input = document.getElementById('answer-input');
+                if (input) input.focus();
+            }, 100);
+        }
+
+        function normalizeAnswer(text) {
+            return text.toLowerCase()
+                .trim()
+                .replace(/[?.!,]/g, '')
+                .replace(/\s+/g, ' ');
+        }
+
+        function checkAnswer() {
+            const question = exercises[currentExercise].questions[currentQuestionIndex];
+            const feedback = document.getElementById('feedback');
+            const input = document.getElementById('answer-input');
+            const userAnswer = normalizeAnswer(input.value);
+            
+            const possibleAnswers = question.a.split('|').map(a => normalizeAnswer(a));
+            const isCorrect = possibleAnswers.includes(userAnswer);
+
+            input.classList.add(isCorrect ? 'correct' : 'incorrect');
+            input.disabled = true;
+
+            questionResults.push({
+                questionNumber: currentQuestionIndex + 1,
+                section: exercises[currentExercise].title,
+                question: question.q,
+                correctAnswer: question.a.split('|')[0],
+                studentAnswer: input.value,
+                isCorrect: isCorrect
+            });
+
+            if (isCorrect) {
+                score++;
+                feedback.className = 'feedback correct';
+                feedback.innerHTML = '✓ Correct! Well done!';
+            } else {
+                feedback.className = 'feedback incorrect';
+                const correctAnswers = question.a.split('|').join(' or ');
+                feedback.innerHTML = `✗ Incorrect.`;
+                feedback.innerHTML += `<div class="correct-answer">Correct answer: <strong>${correctAnswers}</strong></div>`;
+            }
+
+            document.getElementById('check-btn').style.display = 'none';
+            document.getElementById('next-btn').style.display = 'inline-block';
+
+            if (currentQuestionIndex === totalQuestions - 1) {
+                document.getElementById('next-btn').textContent = 'See Results 🎉';
+            }
+        }
+
+        function nextQuestion() {
+            currentQuestionIndex++;
+
+            if (currentQuestionIndex < totalQuestions) {
+                loadQuestion();
+                document.getElementById('next-btn').textContent = 'Next →';
+            } else {
+                showResults();
+            }
+        }
+
+        async function showResults() {
+            document.getElementById('quiz-screen').style.display = 'none';
+            document.getElementById('results-screen').style.display = 'flex';
+
+            const percentage = Math.round((score / totalQuestions) * 100);
+            const incorrect = totalQuestions - score;
+
+            document.getElementById('score-percentage').textContent = percentage + '%';
+            document.getElementById('correct-count').textContent = score;
+            document.getElementById('incorrect-count').textContent = incorrect;
+            document.getElementById('total-questions').textContent = totalQuestions;
+
+            const scoreCircle = document.getElementById('score-circle');
+            const feedbackMessage = document.getElementById('feedback-message');
+
+            if (percentage >= 90) {
+                scoreCircle.style.background = 'linear-gradient(135deg, #27ae60, #229954)';
+                feedbackMessage.textContent = '🌟 Outstanding! You\'ve mastered this exercise!';
+            } else if (percentage >= 70) {
+                scoreCircle.style.background = 'linear-gradient(135deg, #3498db, #2980b9)';
+                feedbackMessage.textContent = '👍 Great job! Keep up the good work!';
+            } else if (percentage >= 50) {
+                scoreCircle.style.background = 'linear-gradient(135deg, #f39c12, #e67e22)';
+                feedbackMessage.textContent = '📚 Good effort! Review and try again!';
+            } else {
+                scoreCircle.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
+                feedbackMessage.textContent = '💪 Keep practicing! You\'ll improve!';
+            }
+
+            await sendToGoogleSheets();
+        }
+
+        async function sendToGoogleSheets() {
+            const indicator = document.getElementById('saving-indicator');
+            indicator.style.display = 'block';
+
+            try {
+                const timestamp = new Date().toLocaleString();
+                const percentage = Math.round((score / totalQuestions) * 100);
+
+                const data = {
+                    timestamp: timestamp,
+                    studentName: studentName,
+                    quizType: 'Grammar - ' + exercises[currentExercise].title,
+                    score: score,
+                    totalQuestions: totalQuestions,
+                    percentage: percentage,
+                    results: questionResults
+                };
+
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                indicator.textContent = '✓ Results saved successfully!';
+                indicator.style.background = 'rgba(39, 174, 96, 0.9)';
+                setTimeout(() => {
+                    indicator.style.display = 'none';
+                }, 3000);
+
+            } catch (error) {
+                console.error('Error saving to Google Sheets:', error);
+                indicator.textContent = '⚠ Could not save to Google Sheets';
+                indicator.style.background = 'rgba(231, 76, 60, 0.9)';
+                setTimeout(() => {
+                    indicator.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        function goToMenu() {
+            document.getElementById('menu-screen').style.display = 'flex';
+            document.getElementById('quiz-screen').style.display = 'none';
+            document.getElementById('results-screen').style.display = 'none';
+        }
+
+        function retakeExercise() {
+            startExercise(currentExercise);
+        }
+
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const checkBtn = document.getElementById('check-btn');
+                const nextBtn = document.getElementById('next-btn');
+                
+                if (checkBtn.style.display !== 'none') {
+                    checkAnswer();
+                } else if (nextBtn.style.display !== 'none') {
+                    nextQuestion();
+                }
+            }
+        });
+    </script>
+
+</body>
+</html>
